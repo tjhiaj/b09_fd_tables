@@ -18,11 +18,39 @@ int isNumber(char* input) {
     return 1;
 }
 
-int main() {
-    int row = 0;
+void printHeader(int pre_process){
+    if (pre_process){
+        printf("%-8s %-8s %-8s\n", "", "PID", "FD");
+        printf("        =============\n");
+    }
+    else{
+        printf("%-8s %-8s %-8s %-32s %s\n", "", "PID", "FD", "Filename", "Inode");
+        printf("        ================================================\n");
+    }
+}
 
-    printf("%-8s %-8s %-8s %-32s %s\n", "", "PID", "FD", "Filename", "Inode");
-    printf("        ================================================\n");
+void printData(int pre_process, int * row, struct dirent * entry, struct dirent * fd_entry, char * target_path, struct stat statbuf){
+    if (pre_process){
+        printf("%-8d %-8s %-8s\n", (*row)++, entry->d_name, fd_entry->d_name);
+    }
+    else{
+        printf("%-8d %-8s %-8s %-32s %ld\n", (*row)++, entry->d_name, fd_entry->d_name, target_path, (long)statbuf.st_ino);
+    }
+}
+
+int main(int argc, char ** argv) {
+    int row = 0;
+    int pre_process = 0;
+    int flag_detected = 0;
+
+    for (int i = 1; i < argc; ++i) {
+        if (strncmp(argv[i], "--pre-process", 12) == 0) {
+            pre_process = 1;
+            flag_detected = 1;
+        } 
+    }
+
+    printHeader(pre_process);
 
     DIR *proc = opendir(PROC_PATH);
     if (!proc) {
@@ -59,7 +87,7 @@ int main() {
                     target_path[len] = '\0';
                     struct stat statbuf;
                     if (stat(link_path, &statbuf) == 0) {
-                        printf("%-8d %-8s %-8s %-32s %ld\n", row++, entry->d_name, fd_entry->d_name, target_path, (long)statbuf.st_ino);
+                        printData(pre_process, &row, entry, fd_entry, target_path, statbuf);
                     }
                 }
             }
