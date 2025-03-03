@@ -104,10 +104,11 @@ int main(int argc, char ** argv) {
     int pre_process = 0;
     int systemWide = 0;
     int Vnodes = 0;
+    int composite = 0;
     int flag_detected = 0;
 
     for (int i = 1; i < argc; ++i) {
-        if (strncmp(argv[i], "--pre-process", 12) == 0) {
+        if (strncmp(argv[i], "--pre-process", 13) == 0) {
             pre_process = 1;
             flag_detected = 1;
         } 
@@ -115,8 +116,12 @@ int main(int argc, char ** argv) {
             systemWide = 1;
             flag_detected = 1;
         }
-        if (strncmp(argv[i], "--Vnodes", 12) == 0) {
+        if (strncmp(argv[i], "--Vnodes", 8) == 0) {
             Vnodes = 1;
+            flag_detected = 1;
+        }
+        if (strncmp(argv[i], "--composite", 11) == 0) {
+            composite = 1;
             flag_detected = 1;
         }
     }
@@ -133,9 +138,9 @@ int main(int argc, char ** argv) {
         printHeader(0, 0, Vnodes);
         processData(0, 0, Vnodes);
     }
-    if (!flag_detected){
-        printHeader(pre_process, systemWide, Vnodes);
-        processData(pre_process, systemWide, Vnodes);
+    if (!flag_detected || composite){
+        printHeader(0, 0, 0);
+        processData(0, 0, 0);
     }
     
     return 0;
