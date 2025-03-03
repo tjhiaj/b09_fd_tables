@@ -4,9 +4,16 @@
 #include <unistd.h>
 #include <sys/stat.h>
 #include <ctype.h>
+#include <stdlib.h>
 
 #define PROC_PATH "/proc"
-#define MAX_PATH_LENGTH 512
+#define MAX_PATH_LENGTH 500
+#define MAX_INODES 10000
+
+typedef struct {
+    long inode;
+    int count;
+} InodeEntry;
 
 int isNumber(char* input) {
     int length = strlen(input);
@@ -37,6 +44,18 @@ void printHeader(int pre_process, int systemWide, int Vnodes){
     }
 }
 
+void printSummary(int inodeCount, InodeEntry * inodeTable){
+    printf("Summary Table\n" );
+    printf("================\n");
+    for (int i = 0; i < inodeCount; i++) {
+        printf("%ld (%d)", inodeTable[i].inode, inodeTable[i].count);
+        if (i < inodeCount - 1) {
+            printf(",  ");
+        }
+    }
+    printf("\n");
+}
+
 void printData(int pre_process, int systemWide, int Vnodes, int * row, struct dirent * entry, struct dirent * fd_entry, char * target_path, struct stat statbuf){
     if (pre_process){
         printf("%-8d %-8s %-8s\n", (*row)++, entry->d_name, fd_entry->d_name);
@@ -52,7 +71,7 @@ void printData(int pre_process, int systemWide, int Vnodes, int * row, struct di
     }
 }
 
-void processData(int pre_process, int systemWide, int Vnodes){
+void processData(int pre_process, int systemWide, int Vnodes, int summary, int* inodeCount, InodeEntry** inodeTable){
     int row = 0;
 
     DIR *proc = opendir(PROC_PATH);
@@ -90,7 +109,23 @@ void processData(int pre_process, int systemWide, int Vnodes){
                     target_path[len] = '\0';
                     struct stat statbuf;
                     if (stat(link_path, &statbuf) == 0) {
-                        printData(pre_process, systemWide, Vnodes, &row, entry, fd_entry, target_path, statbuf);
+                        if (summary) {
+                            int found = 0;
+                            for (int i = 0; i < *inodeCount; i++) {
+                                if ((*inodeTable)[i].inode == statbuf.st_ino) {
+                                    (*inodeTable)[i].count++;
+                                    found = 1;
+                                    break;
+                                }
+                            }
+                            if (!found && *inodeCount < MAX_INODES) {
+                                (*inodeTable)[*inodeCount].inode = statbuf.st_ino;
+                                (*inodeTable)[*inodeCount].count = 1;
+                                (*inodeCount)++;
+                            }
+                        } else {
+                            printData(pre_process, systemWide, Vnodes, &row, entry, fd_entry, target_path, statbuf);
+                        }
                     }
                 }
             }
@@ -105,7 +140,11 @@ int main(int argc, char ** argv) {
     int systemWide = 0;
     int Vnodes = 0;
     int composite = 0;
+    int summary = 0;
     int flag_detected = 0;
+    
+    InodeEntry* inodeTable = malloc(MAX_INODES * sizeof(InodeEntry));
+    int inodeCount = 0;
 
     for (int i = 1; i < argc; ++i) {
         if (strncmp(argv[i], "--pre-process", 13) == 0) {
@@ -124,23 +163,31 @@ int main(int argc, char ** argv) {
             composite = 1;
             flag_detected = 1;
         }
+        if (strncmp(argv[i], "--summary", 9) == 0) {
+            summary = 1;
+            flag_detected = 1;
+        }
     }
 
     if (pre_process) {
         printHeader(pre_process, 0, 0);
-        processData(pre_process, 0, 0);
+        processData(pre_process, 0, 0, 0, &inodeCount, &inodeTable);
     }
     if (systemWide) {
         printHeader(0, systemWide, 0);
-        processData(0, systemWide, 0);
+        processData(0, systemWide, 0, 0, &inodeCount, &inodeTable);
     }
     if (Vnodes) {
         printHeader(0, 0, Vnodes);
-        processData(0, 0, Vnodes);
+        processData(0, 0, Vnodes, 0, &inodeCount, &inodeTable);
     }
     if (!flag_detected || composite){
         printHeader(0, 0, 0);
-        processData(0, 0, 0);
+        processData(0, 0, 0, 0, &inodeCount, &inodeTable);
+    }
+    if (summary) {
+        processData(0, 0, Vnodes, summary, &inodeCount, &inodeTable);
+        printSummary(inodeCount, inodeTable);
     }
     
     return 0;
