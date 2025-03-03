@@ -18,7 +18,7 @@ int isNumber(char* input) {
     return 1;
 }
 
-void printHeader(int pre_process, int systemWide){
+void printHeader(int pre_process, int systemWide, int Vnodes){
     if (pre_process){
         printf("%-8s %-8s %-8s\n", "", "PID", "FD");
         printf("        =============\n");
@@ -27,25 +27,32 @@ void printHeader(int pre_process, int systemWide){
         printf("%-8s %-8s %-8s %-32s\n", "", "PID", "FD", "Filename" );
         printf("        ============================\n");
     }
+    else if (Vnodes){
+        printf("%-8s %s\n", "","Inode" );
+        printf("        ================\n");
+    }
     else{
         printf("%-8s %-8s %-8s %-32s %s\n", "", "PID", "FD", "Filename", "Inode");
         printf("        ================================================\n");
     }
 }
 
-void printData(int pre_process, int systemWide, int * row, struct dirent * entry, struct dirent * fd_entry, char * target_path, struct stat statbuf){
+void printData(int pre_process, int systemWide, int Vnodes, int * row, struct dirent * entry, struct dirent * fd_entry, char * target_path, struct stat statbuf){
     if (pre_process){
         printf("%-8d %-8s %-8s\n", (*row)++, entry->d_name, fd_entry->d_name);
     }
     else if (systemWide){
         printf("%-8d %-8s %-8s %-32s\n", (*row)++, entry->d_name, fd_entry->d_name, target_path);
     }
+    else if (Vnodes){
+        printf("%-8d %ld\n", (*row)++, (long)statbuf.st_ino);
+    }
     else{
         printf("%-8d %-8s %-8s %-32s %ld\n", (*row)++, entry->d_name, fd_entry->d_name, target_path, (long)statbuf.st_ino);
     }
 }
 
-void processData(int pre_process, int systemWide){
+void processData(int pre_process, int systemWide, int Vnodes){
     int row = 0;
 
     DIR *proc = opendir(PROC_PATH);
@@ -83,7 +90,7 @@ void processData(int pre_process, int systemWide){
                     target_path[len] = '\0';
                     struct stat statbuf;
                     if (stat(link_path, &statbuf) == 0) {
-                        printData(pre_process, systemWide, &row, entry, fd_entry, target_path, statbuf);
+                        printData(pre_process, systemWide, Vnodes, &row, entry, fd_entry, target_path, statbuf);
                     }
                 }
             }
@@ -96,6 +103,7 @@ void processData(int pre_process, int systemWide){
 int main(int argc, char ** argv) {
     int pre_process = 0;
     int systemWide = 0;
+    int Vnodes = 0;
     int flag_detected = 0;
 
     for (int i = 1; i < argc; ++i) {
@@ -107,19 +115,27 @@ int main(int argc, char ** argv) {
             systemWide = 1;
             flag_detected = 1;
         }
+        if (strncmp(argv[i], "--Vnodes", 12) == 0) {
+            Vnodes = 1;
+            flag_detected = 1;
+        }
     }
 
     if (pre_process) {
-        printHeader(pre_process, 0);
-        processData(pre_process, 0);
+        printHeader(pre_process, 0, 0);
+        processData(pre_process, 0, 0);
     }
     if (systemWide) {
-        printHeader(0, systemWide);
-        processData(0, systemWide);
+        printHeader(0, systemWide, 0);
+        processData(0, systemWide, 0);
+    }
+    if (Vnodes) {
+        printHeader(0, 0, Vnodes);
+        processData(0, 0, Vnodes);
     }
     if (!flag_detected){
-        printHeader(pre_process, systemWide);
-        processData(pre_process, systemWide);
+        printHeader(pre_process, systemWide, Vnodes);
+        processData(pre_process, systemWide, Vnodes);
     }
     
     return 0;
