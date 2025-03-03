@@ -18,10 +18,14 @@ int isNumber(char* input) {
     return 1;
 }
 
-void printHeader(int pre_process){
+void printHeader(int pre_process, int systemWide){
     if (pre_process){
         printf("%-8s %-8s %-8s\n", "", "PID", "FD");
         printf("        =============\n");
+    }
+    else if (systemWide){
+        printf("%-8s %-8s %-8s %-32s\n", "", "PID", "FD", "Filename" );
+        printf("        ============================\n");
     }
     else{
         printf("%-8s %-8s %-8s %-32s %s\n", "", "PID", "FD", "Filename", "Inode");
@@ -29,33 +33,25 @@ void printHeader(int pre_process){
     }
 }
 
-void printData(int pre_process, int * row, struct dirent * entry, struct dirent * fd_entry, char * target_path, struct stat statbuf){
+void printData(int pre_process, int systemWide, int * row, struct dirent * entry, struct dirent * fd_entry, char * target_path, struct stat statbuf){
     if (pre_process){
         printf("%-8d %-8s %-8s\n", (*row)++, entry->d_name, fd_entry->d_name);
+    }
+    else if (systemWide){
+        printf("%-8d %-8s %-8s %-32s\n", (*row)++, entry->d_name, fd_entry->d_name, target_path);
     }
     else{
         printf("%-8d %-8s %-8s %-32s %ld\n", (*row)++, entry->d_name, fd_entry->d_name, target_path, (long)statbuf.st_ino);
     }
 }
 
-int main(int argc, char ** argv) {
+void processData(int pre_process, int systemWide){
     int row = 0;
-    int pre_process = 0;
-    int flag_detected = 0;
-
-    for (int i = 1; i < argc; ++i) {
-        if (strncmp(argv[i], "--pre-process", 12) == 0) {
-            pre_process = 1;
-            flag_detected = 1;
-        } 
-    }
-
-    printHeader(pre_process);
 
     DIR *proc = opendir(PROC_PATH);
     if (!proc) {
         perror("opendir");
-        return 1;
+        return;
     }
 
     struct dirent *entry;
@@ -87,7 +83,7 @@ int main(int argc, char ** argv) {
                     target_path[len] = '\0';
                     struct stat statbuf;
                     if (stat(link_path, &statbuf) == 0) {
-                        printData(pre_process, &row, entry, fd_entry, target_path, statbuf);
+                        printData(pre_process, systemWide, &row, entry, fd_entry, target_path, statbuf);
                     }
                 }
             }
@@ -95,5 +91,36 @@ int main(int argc, char ** argv) {
         }
     }
     closedir(proc);
+}
+
+int main(int argc, char ** argv) {
+    int pre_process = 0;
+    int systemWide = 0;
+    int flag_detected = 0;
+
+    for (int i = 1; i < argc; ++i) {
+        if (strncmp(argv[i], "--pre-process", 12) == 0) {
+            pre_process = 1;
+            flag_detected = 1;
+        } 
+        if (strncmp(argv[i], "--systemWide", 12) == 0) {
+            systemWide = 1;
+            flag_detected = 1;
+        }
+    }
+
+    if (pre_process) {
+        printHeader(pre_process, 0);
+        processData(pre_process, 0);
+    }
+    if (systemWide) {
+        printHeader(0, systemWide);
+        processData(0, systemWide);
+    }
+    if (!flag_detected){
+        printHeader(pre_process, systemWide);
+        processData(pre_process, systemWide);
+    }
+    
     return 0;
 }
