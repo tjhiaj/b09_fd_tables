@@ -8,12 +8,12 @@
 
 #define PROC_PATH "/proc"
 #define MAX_PATH_LENGTH 500
-#define MAX_INODES 10000
+#define MAX_PIDS 10000
 
 typedef struct {
-    long inode;
+    char * pid;
     int count;
-} InodeEntry;
+} PIDEntry;
 
 int isNumber(char* input) {
     int length = strlen(input);
@@ -44,13 +44,26 @@ void printHeader(int pre_process, int systemWide, int Vnodes){
     }
 }
 
-void printSummary(int inodeCount, InodeEntry * inodeTable){
+void printSummary(int pidCount, PIDEntry * pidTable){
     printf("Summary Table\n" );
     printf("================\n");
-    for (int i = 0; i < inodeCount; i++) {
-        printf("%ld (%d)", inodeTable[i].inode, inodeTable[i].count);
-        if (i < inodeCount - 1) {
+    for (int i = 0; i < pidCount; i++) {
+        printf("%s (%d)", pidTable[i].pid, pidTable[i].count);
+        if (i < pidCount - 1) {
             printf(",  ");
+        }
+    }
+    printf("\n");
+}
+
+void printThreshold(int pidCount, PIDEntry * pidTable, int threshold_val){
+    printf("## Offending processes -- #FD threshold=%d\n", threshold_val);
+    for (int i = 0; i < pidCount; i++) {
+        if (pidTable[i].count > threshold_val){
+            printf("%s (%d)", pidTable[i].pid, pidTable[i].count);
+            if (i < pidCount - 1) {
+                printf(",  ");
+            }
         }
     }
     printf("\n");
@@ -71,7 +84,7 @@ void printData(int pre_process, int systemWide, int Vnodes, int * row, struct di
     }
 }
 
-void processData(int pre_process, int systemWide, int Vnodes, int summary, int* inodeCount, InodeEntry** inodeTable){
+void processData(int pre_process, int systemWide, int Vnodes, int summary, int* pidCount, PIDEntry** pidTable, int threshold){
     int row = 0;
 
     DIR *proc = opendir(PROC_PATH);
@@ -109,19 +122,19 @@ void processData(int pre_process, int systemWide, int Vnodes, int summary, int* 
                     target_path[len] = '\0';
                     struct stat statbuf;
                     if (stat(link_path, &statbuf) == 0) {
-                        if (summary) {
+                        if (summary || threshold) {
                             int found = 0;
-                            for (int i = 0; i < *inodeCount; i++) {
-                                if ((*inodeTable)[i].inode == statbuf.st_ino) {
-                                    (*inodeTable)[i].count++;
+                            for (int i = 0; i < *pidCount; i++) {
+                                if (strcmp((*pidTable)[i].pid, entry->d_name) == 0) {
+                                    (*pidTable)[i].count++;
                                     found = 1;
                                     break;
                                 }
                             }
-                            if (!found && *inodeCount < MAX_INODES) {
-                                (*inodeTable)[*inodeCount].inode = statbuf.st_ino;
-                                (*inodeTable)[*inodeCount].count = 1;
-                                (*inodeCount)++;
+                            if (!found && *pidCount < MAX_PIDS) {
+                                (*pidTable)[*pidCount].pid = entry->d_name;
+                                (*pidTable)[*pidCount].count = 1;
+                                (*pidCount)++;
                             }
                         } else {
                             printData(pre_process, systemWide, Vnodes, &row, entry, fd_entry, target_path, statbuf);
@@ -141,10 +154,12 @@ int main(int argc, char ** argv) {
     int Vnodes = 0;
     int composite = 0;
     int summary = 0;
+    int threshold = 0;
+    int threshold_val;
     int flag_detected = 0;
     
-    InodeEntry* inodeTable = malloc(MAX_INODES * sizeof(InodeEntry));
-    int inodeCount = 0;
+    PIDEntry* pidTable = malloc(MAX_PIDS * sizeof(PIDEntry));
+    int pidCount = 0;
 
     for (int i = 1; i < argc; ++i) {
         if (strncmp(argv[i], "--pre-process", 13) == 0) {
@@ -167,27 +182,35 @@ int main(int argc, char ** argv) {
             summary = 1;
             flag_detected = 1;
         }
+        if (strncmp(argv[i], "--threshold=", 12) == 0) {
+            threshold = 1;
+            threshold_val = atoi(argv[i] + 12);
+        }
     }
 
     if (pre_process) {
         printHeader(pre_process, 0, 0);
-        processData(pre_process, 0, 0, 0, &inodeCount, &inodeTable);
+        processData(pre_process, 0, 0, 0, &pidCount, &pidTable, 0);
     }
     if (systemWide) {
         printHeader(0, systemWide, 0);
-        processData(0, systemWide, 0, 0, &inodeCount, &inodeTable);
+        processData(0, systemWide, 0, 0, &pidCount, &pidTable, 0);
     }
     if (Vnodes) {
         printHeader(0, 0, Vnodes);
-        processData(0, 0, Vnodes, 0, &inodeCount, &inodeTable);
+        processData(0, 0, Vnodes, 0, &pidCount, &pidTable, 0);
     }
     if (!flag_detected || composite){
         printHeader(0, 0, 0);
-        processData(0, 0, 0, 0, &inodeCount, &inodeTable);
+        processData(0, 0, 0, 0, &pidCount, &pidTable, 0);
     }
     if (summary) {
-        processData(0, 0, Vnodes, summary, &inodeCount, &inodeTable);
-        printSummary(inodeCount, inodeTable);
+        processData(0, 0, Vnodes, summary, &pidCount, &pidTable, 0);
+        printSummary(pidCount, pidTable);
+    }
+    if (threshold){
+        processData(0, 0, Vnodes, summary, &pidCount, &pidTable, threshold);
+        printThreshold(pidCount, pidTable, threshold_val);
     }
     
     return 0;
