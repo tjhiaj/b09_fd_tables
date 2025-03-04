@@ -25,7 +25,7 @@ int isNumber(char* input) {
     return 1;
 }
 
-void printHeader(int pre_process, int systemWide, int Vnodes){
+void printHeader(int pre_process, int systemWide, int Vnodes, FILE* file, int output_TXT){
     if (pre_process){
         printf("%-8s %-8s %-8s\n", "", "PID", "FD");
         printf("        =============\n");
@@ -37,6 +37,10 @@ void printHeader(int pre_process, int systemWide, int Vnodes){
     else if (Vnodes){
         printf("%-8s %s\n", "","Inode" );
         printf("        ================\n");
+    }
+    else if (output_TXT){
+        fprintf(file, "%-8s %-8s %-8s %-32s %s\n", "", "PID", "FD", "Filename", "Inode");
+        fprintf(file, "        ================================================\n");
     }
     else{
         printf("%-8s %-8s %-8s %-32s %s\n", "", "PID", "FD", "Filename", "Inode");
@@ -69,7 +73,7 @@ void printThreshold(int pidCount, PIDEntry * pidTable, int threshold_val){
     printf("\n");
 }
 
-void printData(int pre_process, int systemWide, int Vnodes, int * row, struct dirent * entry, struct dirent * fd_entry, char * target_path, struct stat statbuf){
+void printData(int pre_process, int systemWide, int Vnodes, int * row, struct dirent * entry, struct dirent * fd_entry, char * target_path, struct stat statbuf, FILE* file, int output_TXT){
     if (pre_process){
         printf("%-8d %-8s %-8s\n", (*row)++, entry->d_name, fd_entry->d_name);
     }
@@ -79,12 +83,15 @@ void printData(int pre_process, int systemWide, int Vnodes, int * row, struct di
     else if (Vnodes){
         printf("%-8d %ld\n", (*row)++, (long)statbuf.st_ino);
     }
+    else if (output_TXT){
+        fprintf(file, "%-8d %-8s %-8s %-32s %ld\n", (*row)++, entry->d_name, fd_entry->d_name, target_path, (long)statbuf.st_ino);
+    }
     else{
         printf("%-8d %-8s %-8s %-32s %ld\n", (*row)++, entry->d_name, fd_entry->d_name, target_path, (long)statbuf.st_ino);
     }
 }
 
-void processData(int pre_process, int systemWide, int Vnodes, int summary, int* pidCount, PIDEntry** pidTable, int threshold, int target_pid){
+void processData(int pre_process, int systemWide, int Vnodes, int summary, int* pidCount, PIDEntry** pidTable, int threshold, int target_pid, FILE* file, int output_TXT){
     int row = 0;
 
     DIR *proc = opendir(PROC_PATH);
@@ -141,7 +148,7 @@ void processData(int pre_process, int systemWide, int Vnodes, int summary, int* 
                                 (*pidCount)++;
                             }
                         } else {
-                            printData(pre_process, systemWide, Vnodes, &row, entry, fd_entry, target_path, statbuf);
+                            printData(pre_process, systemWide, Vnodes, &row, entry, fd_entry, target_path, statbuf, file, output_TXT);
                         }
                     }
                 }
@@ -162,9 +169,16 @@ int main(int argc, char ** argv) {
     int threshold_val;
     int flag_detected = 0;
     pid_t target_pid = 0;
+    int output_TXT = 1;
     
     PIDEntry* pidTable = malloc(MAX_PIDS * sizeof(PIDEntry));
     int pidCount = 0;
+
+    FILE *file = fopen("compositeTable.txt", "w");
+    if (!file) {
+        perror("Failed to open file");
+        return 1;
+    }
 
     for (int i = 1; i < argc; ++i) {
         if (strncmp(argv[i], "--pre-process", 13) == 0) {
@@ -194,32 +208,42 @@ int main(int argc, char ** argv) {
             threshold = 1;
             threshold_val = atoi(argv[i] + 12);
         }
+        else if (strncmp(argv[i], "--output_TXT", 12) == 0) {
+            output_TXT = 1;
+            flag_detected = 1;
+        }
     }
 
     if (pre_process) {
-        printHeader(pre_process, 0, 0);
-        processData(pre_process, 0, 0, 0, &pidCount, &pidTable, 0, target_pid);
+        printHeader(pre_process, 0, 0, file, 0);
+        processData(pre_process, 0, 0, 0, &pidCount, &pidTable, 0, target_pid, file, 0);
     }
     if (systemWide) {
-        printHeader(0, systemWide, 0);
-        processData(0, systemWide, 0, 0, &pidCount, &pidTable, 0, target_pid);
+        printHeader(0, systemWide, 0, file, 0);
+        processData(0, systemWide, 0, 0, &pidCount, &pidTable, 0, target_pid, file, 0);
     }
     if (Vnodes) {
-        printHeader(0, 0, Vnodes);
-        processData(0, 0, Vnodes, 0, &pidCount, &pidTable, 0, target_pid);
+        printHeader(0, 0, Vnodes, file, 0);
+        processData(0, 0, Vnodes, 0, &pidCount, &pidTable, 0, target_pid, file, 0);
     }
     if (!flag_detected || composite){
-        printHeader(0, 0, 0);
-        processData(0, 0, 0, 0, &pidCount, &pidTable, 0, target_pid);
+        printHeader(0, 0, 0, file, 0);
+        processData(0, 0, 0, 0, &pidCount, &pidTable, 0, target_pid, file, 0);
     }
     if (summary) {
-        processData(0, 0, Vnodes, summary, &pidCount, &pidTable, 0, target_pid);
+        processData(0, 0, Vnodes, summary, &pidCount, &pidTable, 0, target_pid, file, 0);
         printSummary(pidCount, pidTable);
     }
     if (threshold){
-        processData(0, 0, Vnodes, summary, &pidCount, &pidTable, threshold, target_pid);
+        processData(0, 0, Vnodes, summary, &pidCount, &pidTable, threshold, target_pid, file, 0);
         printThreshold(pidCount, pidTable, threshold_val);
     }
+    if (output_TXT){
+        printHeader(0, 0, 0, file, output_TXT);
+        processData(0, 0, 0, 0, &pidCount, &pidTable, 0, target_pid, file, output_TXT);
+    }
+    
+    fclose(file);
     free(pidTable);
     return 0;
 }
