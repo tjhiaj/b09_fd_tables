@@ -25,31 +25,34 @@ int isNumber(char* input) {
     return 1;
 }
 
-void printHeader(int pre_process, int systemWide, int Vnodes, FILE* file, int output_TXT, int output_binary){
-    if (pre_process){
+void printHeader(int flag, FILE* file) {
+    if (flag == 1) {
+        // pre-process
         printf("%-8s %-8s %-8s\n", "", "PID", "FD");
         printf("        =============\n");
     }
-    else if (systemWide){
-        printf("%-8s %-8s %-8s %-32s\n", "", "PID", "FD", "Filename" );
-        printf("        ============================\n");
+    else if (flag == 2){
+        // systemWide
+        printf("%-8s %-8s %-8s %-32s\n", "", "PID", "FD", "Filename");
+        printf("        ============================\n");    
     }
-    else if (Vnodes){
-        printf("%-8s %s\n", "","Inode" );
+    else if (flag == 3){
+        // Vnodes
+        printf("%-8s %s\n", "", "Inode");
         printf("        ================\n");
     }
-    else if (output_TXT){
+    else if (flag == 4){
+        // output_TXT
         fprintf(file, "%-8s %-8s %-8s %-32s %s\n", "", "PID", "FD", "Filename", "Inode");
         fprintf(file, "        ================================================\n");
     }
-    else if (output_binary){
-        char *header1 = "        PID      FD       Filename                       Inode\n";
-        char *header2 = "        ================================================\n";
- 
-        fwrite(header1, sizeof(char), strlen(header1), file);
-        fwrite(header2, sizeof(char), strlen(header2), file);
+    else if (flag == 5){
+        // output_binary
+        fwrite("        PID      FD       Filename                       Inode\n", sizeof(char), 55, file);
+        fwrite("        ================================================\n", sizeof(char), 49, file);
     }
     else{
+        // Default output
         printf("%-8s %-8s %-8s %-32s %s\n", "", "PID", "FD", "Filename", "Inode");
         printf("        ================================================\n");
     }
@@ -192,12 +195,6 @@ int main(int argc, char ** argv) {
     FILE *file_txt = NULL;
     FILE *file_binary = NULL;
 
-    FILE *file = fopen("compositeTable.txt", "w");
-    if (!file) {
-        perror("Failed to open file");
-        return 1;
-    }
-
     for (int i = 1; i < argc; ++i) {
         if (strncmp(argv[i], "--pre-process", 14) == 0) {
             pre_process = 1;
@@ -237,27 +234,27 @@ int main(int argc, char ** argv) {
     }
 
     if (pre_process) {
-        printHeader(pre_process, 0, 0, file, 0, 0);
-        processData(pre_process, 0, 0, 0, &pidCount, &pidTable, 0, target_pid, file, 0, 0);
+        printHeader(1, NULL);
+        processData(pre_process, 0, 0, 0, &pidCount, &pidTable, 0, target_pid, NULL, 0, 0);
     }
     if (systemWide) {
-        printHeader(0, systemWide, 0, file, 0, 0);
-        processData(0, systemWide, 0, 0, &pidCount, &pidTable, 0, target_pid, file, 0, 0);
+        printHeader(2, NULL);
+        processData(0, systemWide, 0, 0, &pidCount, &pidTable, 0, target_pid, NULL, 0, 0);
     }
     if (Vnodes) {
-        printHeader(0, 0, Vnodes, file, 0, 0);
-        processData(0, 0, Vnodes, 0, &pidCount, &pidTable, 0, target_pid, file, 0, 0);
+        printHeader(3, NULL);
+        processData(0, 0, Vnodes, 0, &pidCount, &pidTable, 0, target_pid, NULL, 0, 0);
     }
     if (!flag_detected || composite){
-        printHeader(0, 0, 0, file, 0, 0);
-        processData(0, 0, 0, 0, &pidCount, &pidTable, 0, target_pid, file, 0, 0);
+        printHeader(0, NULL);
+        processData(0, 0, 0, 0, &pidCount, &pidTable, 0, target_pid, NULL, 0, 0);
     }
     if (summary) {
-        processData(0, 0, Vnodes, summary, &pidCount, &pidTable, 0, target_pid, file, 0, 0);
+        processData(0, 0, Vnodes, summary, &pidCount, &pidTable, 0, target_pid, NULL, 0, 0);
         printSummary(pidCount, pidTable);
     }
     if (threshold){
-        processData(0, 0, Vnodes, summary, &pidCount, &pidTable, threshold, target_pid, file, 0, 0);
+        processData(0, 0, Vnodes, summary, &pidCount, &pidTable, threshold, target_pid, NULL, 0, 0);
         printThreshold(pidCount, pidTable, threshold_val);
     }
     if (output_TXT){
@@ -266,7 +263,7 @@ int main(int argc, char ** argv) {
             perror("Failed to open file");
             return 1;
         }
-        printHeader(0, 0, 0, file_txt, output_TXT, 0);
+        printHeader(4, NULL);
         processData(0, 0, 0, 0, &pidCount, &pidTable, 0, target_pid, file_txt, output_TXT, 0);
         fclose(file_txt);
     }
@@ -276,7 +273,7 @@ int main(int argc, char ** argv) {
             perror("Failed to open file");
             return 1;
         }
-        printHeader(0, 0, 0, file_binary, 0, output_binary);
+        printHeader(5, NULL);
         processData(0, 0, 0, 0, &pidCount, &pidTable, 0, target_pid, file_binary, 0, output_binary);
         fclose(file_binary);
     }
