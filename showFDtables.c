@@ -108,7 +108,47 @@ void printData(int flag, int * row, struct dirent * entry, struct dirent * fd_en
     }
 }
 
-void processData(int flag, int* pidCount, PIDEntry** pidTable, int target_pid, FILE* file){
+void processFD(int flag, int row, int* pidCount, PIDEntry** pidTable, int target_pid, FILE* file, char * fd_path, struct dirent *entry, DIR *dir) {
+    struct dirent *fd_entry;
+    while ((fd_entry = readdir(dir)) != NULL) {
+        if (fd_entry->d_type != DT_LNK) continue;
+
+        char link_path[MAX_PATH_LENGTH], target_path[MAX_PATH_LENGTH];
+        strncpy(link_path, fd_path, sizeof(link_path) - 1);
+        link_path[sizeof(link_path) - 1] = '\0';
+
+        strncat(link_path, "/", sizeof(link_path) - strlen(link_path) - 1);
+        strncat(link_path, fd_entry->d_name, sizeof(link_path) - strlen(link_path) - 1);
+                
+        ssize_t len = readlink(link_path, target_path, sizeof(target_path) - 1);
+        if (len != -1) {
+            target_path[len] = '\0';
+            struct stat statbuf;
+            if (stat(link_path, &statbuf) == 0) {
+                if (flag == 6 || flag == 7) {
+                    int found = 0;
+                    for (int i = 0; i < *pidCount; i++) {
+                        if (strcmp((*pidTable)[i].pid, entry->d_name) == 0) {
+                            (*pidTable)[i].count++;
+                            found = 1;
+                            break;
+                        }
+                    }
+                    if (!found && *pidCount < MAX_PIDS) {
+                        (*pidTable)[*pidCount].pid = entry->d_name;
+                        (*pidTable)[*pidCount].count = 1;
+                        (*pidCount)++;
+                    }
+                } else {
+                    printData(flag, &row, entry, fd_entry, target_path, statbuf, file);
+                }
+            }
+        }
+    }
+    closedir(dir);
+}
+
+void processDirectory(int flag, int* pidCount, PIDEntry** pidTable, int target_pid, FILE* file) {
     int row = 0;
 
     DIR *proc = opendir(PROC_PATH);
@@ -127,50 +167,14 @@ void processData(int flag, int* pidCount, PIDEntry** pidTable, int target_pid, F
             char fd_path[MAX_PATH_LENGTH];
             strncpy(fd_path, PROC_PATH, sizeof(fd_path) - 1);
             fd_path[sizeof(fd_path) - 1] = '\0';
-            
             strncat(fd_path, "/", sizeof(fd_path) - strlen(fd_path) - 1);
             strncat(fd_path, entry->d_name, sizeof(fd_path) - strlen(fd_path) - 1);
             strncat(fd_path, "/fd", sizeof(fd_path) - strlen(fd_path) - 1);
+
             DIR *dir = opendir(fd_path);
             if (!dir) continue;
 
-            struct dirent *fd_entry;
-            while ((fd_entry = readdir(dir)) != NULL) {
-                if (fd_entry->d_type != DT_LNK) continue;
-
-                char link_path[MAX_PATH_LENGTH], target_path[MAX_PATH_LENGTH];
-                strncpy(link_path, fd_path, sizeof(link_path) - 1);
-                link_path[sizeof(link_path) - 1] = '\0';
-
-                strncat(link_path, "/", sizeof(link_path) - strlen(link_path) - 1);
-                strncat(link_path, fd_entry->d_name, sizeof(link_path) - strlen(link_path) - 1);
-                
-                ssize_t len = readlink(link_path, target_path, sizeof(target_path) - 1);
-                if (len != -1) {
-                    target_path[len] = '\0';
-                    struct stat statbuf;
-                    if (stat(link_path, &statbuf) == 0) {
-                        if (flag == 6 || flag == 7) {
-                            int found = 0;
-                            for (int i = 0; i < *pidCount; i++) {
-                                if (strcmp((*pidTable)[i].pid, entry->d_name) == 0) {
-                                    (*pidTable)[i].count++;
-                                    found = 1;
-                                    break;
-                                }
-                            }
-                            if (!found && *pidCount < MAX_PIDS) {
-                                (*pidTable)[*pidCount].pid = entry->d_name;
-                                (*pidTable)[*pidCount].count = 1;
-                                (*pidCount)++;
-                            }
-                        } else {
-                            printData(flag, &row, entry, fd_entry, target_path, statbuf, file);
-                        }
-                    }
-                }
-            }
-            closedir(dir);
+            processFD(flag, row, pidCount, pidTable, target_pid, file, fd_path, entry, dir);
         }
     }
     closedir(proc);
@@ -190,6 +194,10 @@ int main(int argc, char ** argv) {
     int output_binary = 0;
     
     PIDEntry* pidTable = malloc(MAX_PIDS * sizeof(PIDEntry));
+    if (!pidTable) {
+        perror("malloc failed");
+        return 1;
+    }
     int pidCount = 0;
 
     FILE *file_txt = NULL;
@@ -235,26 +243,26 @@ int main(int argc, char ** argv) {
 
     if (pre_process) {
         printHeader(1, NULL);
-        processData(1, &pidCount, &pidTable, target_pid, NULL);
+        processDirectory(1, &pidCount, &pidTable, target_pid, NULL);
     }
     if (systemWide) {
         printHeader(2, NULL);
-        processData(2, &pidCount, &pidTable, target_pid, NULL);
+        processDirectory(2, &pidCount, &pidTable, target_pid, NULL);
     }
     if (Vnodes) {
         printHeader(3, NULL);
-        processData(3, &pidCount, &pidTable, target_pid, NULL);
+        processDirectory(3, &pidCount, &pidTable, target_pid, NULL);
     }
     if (!flag_detected || composite){
         printHeader(0, NULL);
-        processData(0, &pidCount, &pidTable, target_pid, NULL);
+        processDirectory(0, &pidCount, &pidTable, target_pid, NULL);
     }
     if (summary) {
-        processData(6, &pidCount, &pidTable, target_pid, NULL);
+        processDirectory(6, &pidCount, &pidTable, target_pid, NULL);
         printSummary(pidCount, pidTable);
     }
     if (threshold){
-        processData(7, &pidCount, &pidTable, target_pid, NULL);
+        processDirectory(7, &pidCount, &pidTable, target_pid, NULL);
         printThreshold(pidCount, pidTable, threshold_val);
     }
     if (output_TXT){
@@ -264,7 +272,7 @@ int main(int argc, char ** argv) {
             return 1;
         }
         printHeader(4, NULL);
-        processData(4, &pidCount, &pidTable, target_pid, NULL);
+        processDirectory(4, &pidCount, &pidTable, target_pid, NULL);
         fclose(file_txt);
     }
     if (output_binary){
@@ -274,7 +282,7 @@ int main(int argc, char ** argv) {
             return 1;
         }
         printHeader(5, NULL);
-        processData(5, &pidCount, &pidTable, target_pid, NULL);
+        processDirectory(5, &pidCount, &pidTable, target_pid, NULL);
         fclose(file_binary);
     }
     
