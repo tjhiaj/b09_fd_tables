@@ -25,7 +25,7 @@ int isNumber(char* input) {
     return 1;
 }
 
-void printHeader(int pre_process, int systemWide, int Vnodes, FILE* file, int output_TXT){
+void printHeader(int pre_process, int systemWide, int Vnodes, FILE* file, int output_TXT, int output_binary){
     if (pre_process){
         printf("%-8s %-8s %-8s\n", "", "PID", "FD");
         printf("        =============\n");
@@ -41,6 +41,13 @@ void printHeader(int pre_process, int systemWide, int Vnodes, FILE* file, int ou
     else if (output_TXT){
         fprintf(file, "%-8s %-8s %-8s %-32s %s\n", "", "PID", "FD", "Filename", "Inode");
         fprintf(file, "        ================================================\n");
+    }
+    else if (output_binary){
+        char *header1 = "        PID      FD       Filename                       Inode\n";
+        char *header2 = "        ================================================\n";
+ 
+        fwrite(header1, sizeof(char), strlen(header1), file);
+        fwrite(header2, sizeof(char), strlen(header2), file);
     }
     else{
         printf("%-8s %-8s %-8s %-32s %s\n", "", "PID", "FD", "Filename", "Inode");
@@ -73,7 +80,7 @@ void printThreshold(int pidCount, PIDEntry * pidTable, int threshold_val){
     printf("\n");
 }
 
-void printData(int pre_process, int systemWide, int Vnodes, int * row, struct dirent * entry, struct dirent * fd_entry, char * target_path, struct stat statbuf, FILE* file, int output_TXT){
+void printData(int pre_process, int systemWide, int Vnodes, int * row, struct dirent * entry, struct dirent * fd_entry, char * target_path, struct stat statbuf, FILE* file, int output_TXT, int output_binary){
     if (pre_process){
         printf("%-8d %-8s %-8s\n", (*row)++, entry->d_name, fd_entry->d_name);
     }
@@ -86,12 +93,19 @@ void printData(int pre_process, int systemWide, int Vnodes, int * row, struct di
     else if (output_TXT){
         fprintf(file, "%-8d %-8s %-8s %-32s %ld\n", (*row)++, entry->d_name, fd_entry->d_name, target_path, (long)statbuf.st_ino);
     }
+    else if (output_binary){
+        fwrite(row, sizeof(int), 1, file);
+        fwrite(entry->d_name, sizeof(char), strlen(entry->d_name) + 1, file);
+        fwrite(fd_entry->d_name, sizeof(char), strlen(fd_entry->d_name) + 1, file);
+        fwrite(target_path, sizeof(char), strlen(target_path) + 1, file);
+        fwrite(&statbuf.st_ino, sizeof(ino_t), 1, file);
+    }
     else{
         printf("%-8d %-8s %-8s %-32s %ld\n", (*row)++, entry->d_name, fd_entry->d_name, target_path, (long)statbuf.st_ino);
     }
 }
 
-void processData(int pre_process, int systemWide, int Vnodes, int summary, int* pidCount, PIDEntry** pidTable, int threshold, int target_pid, FILE* file, int output_TXT){
+void processData(int pre_process, int systemWide, int Vnodes, int summary, int* pidCount, PIDEntry** pidTable, int threshold, int target_pid, FILE* file, int output_TXT, int output_binary){
     int row = 0;
 
     DIR *proc = opendir(PROC_PATH);
@@ -148,7 +162,7 @@ void processData(int pre_process, int systemWide, int Vnodes, int summary, int* 
                                 (*pidCount)++;
                             }
                         } else {
-                            printData(pre_process, systemWide, Vnodes, &row, entry, fd_entry, target_path, statbuf, file, output_TXT);
+                            printData(pre_process, systemWide, Vnodes, &row, entry, fd_entry, target_path, statbuf, file, output_TXT, output_binary);
                         }
                     }
                 }
@@ -169,10 +183,14 @@ int main(int argc, char ** argv) {
     int threshold_val;
     int flag_detected = 0;
     pid_t target_pid = 0;
-    int output_TXT = 1;
+    int output_TXT = 0;
+    int output_binary = 0;
     
     PIDEntry* pidTable = malloc(MAX_PIDS * sizeof(PIDEntry));
     int pidCount = 0;
+
+    FILE *file_txt = NULL;
+    FILE *file_binary = NULL;
 
     FILE *file = fopen("compositeTable.txt", "w");
     if (!file) {
@@ -181,11 +199,11 @@ int main(int argc, char ** argv) {
     }
 
     for (int i = 1; i < argc; ++i) {
-        if (strncmp(argv[i], "--pre-process", 13) == 0) {
+        if (strncmp(argv[i], "--pre-process", 14) == 0) {
             pre_process = 1;
             flag_detected = 1;
         } 
-        else if (strncmp(argv[i], "--systemWide", 12) == 0) {
+        else if (strncmp(argv[i], "--systemWide", 13) == 0) {
             systemWide = 1;
             flag_detected = 1;
         }
@@ -193,57 +211,76 @@ int main(int argc, char ** argv) {
             Vnodes = 1;
             flag_detected = 1;
         }
-        else if (strncmp(argv[i], "--composite", 11) == 0) {
+        else if (strncmp(argv[i], "--composite", 12) == 0) {
             composite = 1;
             flag_detected = 1;
         }
-        else if (strncmp(argv[i], "--summary", 9) == 0) {
+        else if (strncmp(argv[i], "--summary", 10) == 0) {
             summary = 1;
             flag_detected = 1;
         }
         else if (i == 1 && isdigit(argv[i][0])) { 
             target_pid = atoi(argv[i]);
         }
-        else if (strncmp(argv[i], "--threshold=", 12) == 0) {
+        else if (strncmp(argv[i], "--threshold=", 13) == 0) {
             threshold = 1;
             threshold_val = atoi(argv[i] + 12);
         }
-        else if (strncmp(argv[i], "--output_TXT", 12) == 0) {
+        else if (strncmp(argv[i], "--output_TXT", 13) == 0) {
             output_TXT = 1;
+            flag_detected = 1;
+        }
+        else if (strncmp(argv[i], "--output_binary", 16) == 0) {
+            output_binary = 1;
             flag_detected = 1;
         }
     }
 
     if (pre_process) {
-        printHeader(pre_process, 0, 0, file, 0);
-        processData(pre_process, 0, 0, 0, &pidCount, &pidTable, 0, target_pid, file, 0);
+        printHeader(pre_process, 0, 0, file, 0, 0);
+        processData(pre_process, 0, 0, 0, &pidCount, &pidTable, 0, target_pid, file, 0, 0);
     }
     if (systemWide) {
-        printHeader(0, systemWide, 0, file, 0);
-        processData(0, systemWide, 0, 0, &pidCount, &pidTable, 0, target_pid, file, 0);
+        printHeader(0, systemWide, 0, file, 0, 0);
+        processData(0, systemWide, 0, 0, &pidCount, &pidTable, 0, target_pid, file, 0, 0);
     }
     if (Vnodes) {
-        printHeader(0, 0, Vnodes, file, 0);
-        processData(0, 0, Vnodes, 0, &pidCount, &pidTable, 0, target_pid, file, 0);
+        printHeader(0, 0, Vnodes, file, 0, 0);
+        processData(0, 0, Vnodes, 0, &pidCount, &pidTable, 0, target_pid, file, 0, 0);
     }
     if (!flag_detected || composite){
-        printHeader(0, 0, 0, file, 0);
-        processData(0, 0, 0, 0, &pidCount, &pidTable, 0, target_pid, file, 0);
+        printHeader(0, 0, 0, file, 0, 0);
+        processData(0, 0, 0, 0, &pidCount, &pidTable, 0, target_pid, file, 0, 0);
     }
     if (summary) {
-        processData(0, 0, Vnodes, summary, &pidCount, &pidTable, 0, target_pid, file, 0);
+        processData(0, 0, Vnodes, summary, &pidCount, &pidTable, 0, target_pid, file, 0, 0);
         printSummary(pidCount, pidTable);
     }
     if (threshold){
-        processData(0, 0, Vnodes, summary, &pidCount, &pidTable, threshold, target_pid, file, 0);
+        processData(0, 0, Vnodes, summary, &pidCount, &pidTable, threshold, target_pid, file, 0, 0);
         printThreshold(pidCount, pidTable, threshold_val);
     }
     if (output_TXT){
-        printHeader(0, 0, 0, file, output_TXT);
-        processData(0, 0, 0, 0, &pidCount, &pidTable, 0, target_pid, file, output_TXT);
+        file_txt = fopen("compositeTable.txt", "w");
+        if (!file_txt) {
+            perror("Failed to open file");
+            return 1;
+        }
+        printHeader(0, 0, 0, file_txt, output_TXT, 0);
+        processData(0, 0, 0, 0, &pidCount, &pidTable, 0, target_pid, file_txt, output_TXT, 0);
+        fclose(file_txt);
+    }
+    if (output_binary){
+        file_binary = fopen("compositeTable.bin", "wb");
+        if (!file_binary) {
+            perror("Failed to open file");
+            return 1;
+        }
+        printHeader(0, 0, 0, file_binary, 0, output_binary);
+        processData(0, 0, 0, 0, &pidCount, &pidTable, 0, target_pid, file_binary, 0, output_binary);
+        fclose(file_binary);
     }
     
-    fclose(file);
     free(pidTable);
     return 0;
 }
