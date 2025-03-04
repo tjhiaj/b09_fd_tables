@@ -9,6 +9,13 @@
 #define PROC_PATH "/proc"
 #define MAX_PATH_LENGTH 500
 #define MAX_PIDS 10000
+#define FLAG_PRE_PROCESS 1
+#define FLAG_SYSTEM_WIDE 2
+#define FLAG_VNODES 3
+#define FLAG_OUTPUT_TXT 4
+#define FLAG_OUTPUT_BINARY 5
+#define FLAG_SUMMARY 6
+#define FLAG_THRESHOLD 7
 
 typedef struct {
     char * pid;
@@ -242,27 +249,27 @@ int main(int argc, char ** argv) {
     }
 
     if (pre_process) {
-        printHeader(1, NULL);
-        processDirectory(1, &pidCount, &pidTable, target_pid, NULL);
+        printHeader(FLAG_PRE_PROCESS, NULL);
+        processDirectory(FLAG_PRE_PROCESS, &pidCount, &pidTable, target_pid, NULL);
     }
     if (systemWide) {
-        printHeader(2, NULL);
-        processDirectory(2, &pidCount, &pidTable, target_pid, NULL);
+        printHeader(FLAG_SYSTEM_WIDE, NULL);
+        processDirectory(FLAG_SYSTEM_WIDE, &pidCount, &pidTable, target_pid, NULL);
     }
     if (Vnodes) {
-        printHeader(3, NULL);
-        processDirectory(3, &pidCount, &pidTable, target_pid, NULL);
+        printHeader(FLAG_VNODES, NULL);
+        processDirectory(FLAG_VNODES, &pidCount, &pidTable, target_pid, NULL);
     }
     if (!flag_detected || composite){
         printHeader(0, NULL);
         processDirectory(0, &pidCount, &pidTable, target_pid, NULL);
     }
     if (summary) {
-        processDirectory(6, &pidCount, &pidTable, target_pid, NULL);
+        processDirectory(FLAG_SUMMARY, &pidCount, &pidTable, target_pid, NULL);
         printSummary(pidCount, pidTable);
     }
     if (threshold){
-        processDirectory(7, &pidCount, &pidTable, target_pid, NULL);
+        processDirectory(FLAG_THRESHOLD, &pidCount, &pidTable, target_pid, NULL);
         printThreshold(pidCount, pidTable, threshold_val);
     }
     if (output_TXT){
@@ -271,8 +278,8 @@ int main(int argc, char ** argv) {
             perror("Failed to open file");
             return 1;
         }
-        printHeader(4, NULL);
-        processDirectory(4, &pidCount, &pidTable, target_pid, NULL);
+        printHeader(FLAG_OUTPUT_TXT, NULL);
+        processDirectory(FLAG_OUTPUT_TXT, &pidCount, &pidTable, target_pid, NULL);
         fclose(file_txt);
     }
     if (output_binary){
@@ -281,8 +288,8 @@ int main(int argc, char ** argv) {
             perror("Failed to open file");
             return 1;
         }
-        printHeader(5, NULL);
-        processDirectory(5, &pidCount, &pidTable, target_pid, NULL);
+        printHeader(FLAG_OUTPUT_BINARY, NULL);
+        processDirectory(FLAG_OUTPUT_BINARY, &pidCount, &pidTable, target_pid, NULL);
         fclose(file_binary);
     }
     
