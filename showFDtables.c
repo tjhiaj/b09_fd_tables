@@ -84,7 +84,7 @@ void printData(int pre_process, int systemWide, int Vnodes, int * row, struct di
     }
 }
 
-void processData(int pre_process, int systemWide, int Vnodes, int summary, int* pidCount, PIDEntry** pidTable, int threshold){
+void processData(int pre_process, int systemWide, int Vnodes, int summary, int* pidCount, PIDEntry** pidTable, int threshold, int target_pid){
     int row = 0;
 
     DIR *proc = opendir(PROC_PATH);
@@ -96,6 +96,10 @@ void processData(int pre_process, int systemWide, int Vnodes, int summary, int* 
     struct dirent *entry;
     while ((entry = readdir(proc)) != NULL) {
         if (entry->d_type == DT_DIR && isNumber(entry->d_name)) {
+            int current_pid = atoi(entry->d_name);
+            if (target_pid > 0 && current_pid != target_pid) {
+                continue;
+            }
             char fd_path[MAX_PATH_LENGTH];
             strncpy(fd_path, PROC_PATH, sizeof(fd_path) - 1);
             fd_path[sizeof(fd_path) - 1] = '\0';
@@ -157,6 +161,7 @@ int main(int argc, char ** argv) {
     int threshold = 0;
     int threshold_val;
     int flag_detected = 0;
+    pid_t target_pid = 0;
     
     PIDEntry* pidTable = malloc(MAX_PIDS * sizeof(PIDEntry));
     int pidCount = 0;
@@ -166,23 +171,26 @@ int main(int argc, char ** argv) {
             pre_process = 1;
             flag_detected = 1;
         } 
-        if (strncmp(argv[i], "--systemWide", 12) == 0) {
+        else if (strncmp(argv[i], "--systemWide", 12) == 0) {
             systemWide = 1;
             flag_detected = 1;
         }
-        if (strncmp(argv[i], "--Vnodes", 8) == 0) {
+        else if (strncmp(argv[i], "--Vnodes", 8) == 0) {
             Vnodes = 1;
             flag_detected = 1;
         }
-        if (strncmp(argv[i], "--composite", 11) == 0) {
+        else if (strncmp(argv[i], "--composite", 11) == 0) {
             composite = 1;
             flag_detected = 1;
         }
-        if (strncmp(argv[i], "--summary", 9) == 0) {
+        else if (strncmp(argv[i], "--summary", 9) == 0) {
             summary = 1;
             flag_detected = 1;
         }
-        if (strncmp(argv[i], "--threshold=", 12) == 0) {
+        else if (i == 1 && isdigit(argv[i][0])) { 
+            target_pid = atoi(argv[i]);
+        }
+        else if (strncmp(argv[i], "--threshold=", 12) == 0) {
             threshold = 1;
             threshold_val = atoi(argv[i] + 12);
         }
@@ -190,28 +198,28 @@ int main(int argc, char ** argv) {
 
     if (pre_process) {
         printHeader(pre_process, 0, 0);
-        processData(pre_process, 0, 0, 0, &pidCount, &pidTable, 0);
+        processData(pre_process, 0, 0, 0, &pidCount, &pidTable, 0, target_pid);
     }
     if (systemWide) {
         printHeader(0, systemWide, 0);
-        processData(0, systemWide, 0, 0, &pidCount, &pidTable, 0);
+        processData(0, systemWide, 0, 0, &pidCount, &pidTable, 0, target_pid);
     }
     if (Vnodes) {
         printHeader(0, 0, Vnodes);
-        processData(0, 0, Vnodes, 0, &pidCount, &pidTable, 0);
+        processData(0, 0, Vnodes, 0, &pidCount, &pidTable, 0, target_pid);
     }
     if (!flag_detected || composite){
         printHeader(0, 0, 0);
-        processData(0, 0, 0, 0, &pidCount, &pidTable, 0);
+        processData(0, 0, 0, 0, &pidCount, &pidTable, 0, target_pid);
     }
     if (summary) {
-        processData(0, 0, Vnodes, summary, &pidCount, &pidTable, 0);
+        processData(0, 0, Vnodes, summary, &pidCount, &pidTable, 0, target_pid);
         printSummary(pidCount, pidTable);
     }
     if (threshold){
-        processData(0, 0, Vnodes, summary, &pidCount, &pidTable, threshold);
+        processData(0, 0, Vnodes, summary, &pidCount, &pidTable, threshold, target_pid);
         printThreshold(pidCount, pidTable, threshold_val);
     }
-    
+    free(pidTable);
     return 0;
 }
