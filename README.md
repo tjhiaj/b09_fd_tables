@@ -45,7 +45,7 @@ Looking back, the first iteration served as a good foundation, but it was the pr
 - **Description**: Prints a summary table showing the number of file descriptors for each process.
 - **Parameters**:
   - pidCount (int): Number of processes to display.
-  - pidTabl (PIDEntry*): Array of PID entries.
+  - pidTable (PIDEntry*): Array of PID entries.
 
 ### printThreshold(int pidCount, PIDEntry * pidTable, int threshold_val)
 - **Description**: Prints processes whose file descriptor count exceeds a specified threshold.
