@@ -203,6 +203,46 @@ void processDirectory(int flag, int* pidCount, PIDEntry** pidTable, int target_p
     closedir(proc);
 }
 
+void parseArguments(int argc, char **argv, int *flags, int *threshold_val, pid_t *target_pid, int *flag_detected) {
+    for (int i = 1; i < argc; ++i) {
+        if (strncmp(argv[i], "--pre-process", 14) == 0) {
+            flags[FLAG_PRE_PROCESS] = 1;
+            *flag_detected = 1;
+        } 
+        else if (strncmp(argv[i], "--systemWide", 13) == 0) {
+            flags[FLAG_SYSTEM_WIDE] = 1;
+            *flag_detected = 1;
+        }
+        else if (strncmp(argv[i], "--Vnodes", 8) == 0) {
+            flags[FLAG_VNODES] = 1;
+            *flag_detected = 1;
+        }
+        else if (strncmp(argv[i], "--composite", 12) == 0) {
+            flags[FLAG_COMPOSITE] = 1;
+            *flag_detected = 1;
+        }
+        else if (strncmp(argv[i], "--summary", 10) == 0) {
+            flags[FLAG_SUMMARY] = 1;
+            *flag_detected = 1;
+        }
+        else if (i == 1 && isdigit(argv[i][0])) { 
+            *target_pid = atoi(argv[i]);
+        }
+        else if (strncmp(argv[i], "--threshold=", 12) == 0) {
+            flags[FLAG_THRESHOLD] = 1;
+            *threshold_val = atoi(argv[i] + 12);
+        }
+        else if (strncmp(argv[i], "--output_TXT", 13) == 0) {
+            flags[FLAG_OUTPUT_TXT] = 1;
+            *flag_detected = 1;
+        }
+        else if (strncmp(argv[i], "--output_binary", 16) == 0) {
+            flags[FLAG_OUTPUT_BINARY] = 1;
+            *flag_detected = 1;
+        }
+    }
+}
+
 int main(int argc, char ** argv) {
     int flags[8] = {0};
     int threshold_val;
@@ -219,43 +259,7 @@ int main(int argc, char ** argv) {
     FILE *file_txt = NULL;
     FILE *file_binary = NULL;
 
-    for (int i = 1; i < argc; ++i) {
-        if (strncmp(argv[i], "--pre-process", 14) == 0) {
-            flags[FLAG_PRE_PROCESS] = 1;
-            flag_detected = 1;
-        } 
-        else if (strncmp(argv[i], "--systemWide", 13) == 0) {
-            flags[FLAG_SYSTEM_WIDE] = 1;
-            flag_detected = 1;
-        }
-        else if (strncmp(argv[i], "--Vnodes", 8) == 0) {
-            flags[FLAG_VNODES] = 1;
-            flag_detected = 1;
-        }
-        else if (strncmp(argv[i], "--composite", 12) == 0) {
-            flags[FLAG_COMPOSITE] = 1;
-            flag_detected = 1;
-        }
-        else if (strncmp(argv[i], "--summary", 10) == 0) {
-            flags[FLAG_SUMMARY] = 1;
-            flag_detected = 1;
-        }
-        else if (i == 1 && isdigit(argv[i][0])) { 
-            target_pid = atoi(argv[i]);
-        }
-        else if (strncmp(argv[i], "--threshold=", 12) == 0) {
-            flags[FLAG_THRESHOLD] = 1;
-            threshold_val = atoi(argv[i] + 12);
-        }
-        else if (strncmp(argv[i], "--output_TXT", 13) == 0) {
-            flags[FLAG_OUTPUT_TXT] = 1;
-            flag_detected = 1;
-        }
-        else if (strncmp(argv[i], "--output_binary", 16) == 0) {
-            flags[FLAG_OUTPUT_BINARY] = 1;
-            flag_detected = 1;
-        }
-    }
+    parseArguments(argc, argv, flags, &threshold_val, &target_pid, &flag_detected);
 
     if (flags[FLAG_PRE_PROCESS]) {
         printHeader(FLAG_PRE_PROCESS, NULL);
