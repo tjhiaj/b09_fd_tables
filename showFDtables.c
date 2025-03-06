@@ -33,27 +33,27 @@ int isNumber(char* input) {
 }
 
 void printHeader(int flag, FILE* file) {
-    if (flag == 1) {
+    if (flag == FLAG_PRE_PROCESS) {
         // pre-process
         printf("%-8s %-8s %-8s\n", "", "PID", "FD");
         printf("        =============\n");
     }
-    else if (flag == 2){
+    else if (flag == FLAG_SYSTEM_WIDE){
         // systemWide
         printf("%-8s %-8s %-8s %-32s\n", "", "PID", "FD", "Filename");
         printf("        ============================\n");    
     }
-    else if (flag == 3){
+    else if (flag == FLAG_VNODES){
         // Vnodes
         printf("%-8s %s\n", "", "Inode");
         printf("        ================\n");
     }
-    else if (flag == 4){
+    else if (flag == FLAG_OUTPUT_TXT){
         // output_TXT
         fprintf(file, "%-8s %-8s %-8s %-32s %s\n", "", "PID", "FD", "Filename", "Inode");
         fprintf(file, "        ================================================\n");
     }
-    else if (flag == 5){
+    else if (flag == FLAG_OUTPUT_BINARY){
         // output_binary
         fwrite("        PID      FD       Filename                       Inode\n", sizeof(char), 55, file);
         fwrite("        ================================================\n", sizeof(char), 49, file);
@@ -91,19 +91,19 @@ void printThreshold(int pidCount, PIDEntry * pidTable, int threshold_val){
 }
 
 void printData(int flag, int * row, struct dirent * entry, struct dirent * fd_entry, char * target_path, struct stat statbuf, FILE* file){
-    if (flag == 1){
+    if (flag == FLAG_PRE_PROCESS){
         printf("%-8d %-8s %-8s\n", (*row)++, entry->d_name, fd_entry->d_name);
     }
-    else if (flag == 2){
+    else if (flag == FLAG_SYSTEM_WIDE){
         printf("%-8d %-8s %-8s %-32s\n", (*row)++, entry->d_name, fd_entry->d_name, target_path);
     }
-    else if (flag == 3){
+    else if (flag == FLAG_VNODES){
         printf("%-8d %ld\n", (*row)++, (long)statbuf.st_ino);
     }
-    else if (flag == 4){
+    else if (flag == FLAG_OUTPUT_TXT){
         fprintf(file, "%-8d %-8s %-8s %-32s %ld\n", (*row)++, entry->d_name, fd_entry->d_name, target_path, (long)statbuf.st_ino);
     }
-    else if (flag == 5){
+    else if (flag == FLAG_OUTPUT_BINARY){
         fwrite(row, sizeof(int), 1, file);
         fwrite(entry->d_name, sizeof(char), strlen(entry->d_name) + 1, file);
         fwrite(fd_entry->d_name, sizeof(char), strlen(fd_entry->d_name) + 1, file);
@@ -132,7 +132,7 @@ void processFD(int flag, int row, int* pidCount, PIDEntry** pidTable, int target
             target_path[len] = '\0';
             struct stat statbuf;
             if (stat(link_path, &statbuf) == 0) {
-                if (flag == 6 || flag == 7) {
+                if (flag == FLAG_SUMMARY || flag == FLAG_THRESHOLD) {
                     int found = 0;
                     for (int i = 0; i < *pidCount; i++) {
                         if (strcmp((*pidTable)[i].pid, entry->d_name) == 0) {
@@ -158,9 +158,33 @@ void processFD(int flag, int row, int* pidCount, PIDEntry** pidTable, int target
 void processDirectory(int flag, int* pidCount, PIDEntry** pidTable, int target_pid, FILE* file) {
     int row = 0;
 
+    if (target_pid > 0) {
+        char fd_path[MAX_PATH_LENGTH];
+        strncpy(fd_path, PROC_PATH, sizeof(fd_path) - 1);
+        fd_path[sizeof(fd_path) - 1] = '\0';
+        strncat(fd_path, "/", sizeof(fd_path) - strlen(fd_path) - 1);
+
+        char pid_str[20];
+        sprintf(pid_str, "%d", target_pid);
+        strncat(fd_path, pid_str, sizeof(fd_path) - strlen(fd_path) - 1);
+        strncat(fd_path, "/fd", sizeof(fd_path) - strlen(fd_path) - 1);
+        
+        DIR *dir = opendir(fd_path);
+        if (!dir) {
+            perror("opendir failed");
+            return;
+        }
+
+        struct dirent entry;
+        sprintf(entry.d_name, "%d", target_pid);
+
+        processFD(flag, row, pidCount, pidTable, target_pid, file, fd_path, &entry, dir);
+        return;
+    }
+
     DIR *proc = opendir(PROC_PATH);
     if (!proc) {
-        perror("opendir");
+        perror("opendir failed");
         return;
     }
 
@@ -275,7 +299,7 @@ int main(int argc, char ** argv) {
     if (output_TXT){
         file_txt = fopen("compositeTable.txt", "w");
         if (!file_txt) {
-            perror("Failed to open file");
+            perror("fopen failed");
             return 1;
         }
         printHeader(FLAG_OUTPUT_TXT, NULL);
@@ -285,7 +309,7 @@ int main(int argc, char ** argv) {
     if (output_binary){
         file_binary = fopen("compositeTable.bin", "wb");
         if (!file_binary) {
-            perror("Failed to open file");
+            perror("fopen failed");
             return 1;
         }
         printHeader(FLAG_OUTPUT_BINARY, NULL);
