@@ -1,38 +1,17 @@
-#include <dirent.h>
-#include <stdio.h>
-#include <string.h>
-#include <unistd.h>
-#include <sys/stat.h>
-#include <ctype.h>
-#include <stdlib.h>
+#include "showFDtables.h"
 
-#define PROC_PATH "/proc"
-#define MAX_PATH_LENGTH 500
-#define MAX_PIDS 10000
-#define FLAG_PRE_PROCESS 1
-#define FLAG_SYSTEM_WIDE 2
-#define FLAG_VNODES 3
-#define FLAG_OUTPUT_TXT 4
-#define FLAG_OUTPUT_BINARY 5
-#define FLAG_SUMMARY 6
-#define FLAG_THRESHOLD 7
-#define FLAG_COMPOSITE 0
-
-typedef struct {
-    char * pid;
-    int count;
-} PIDEntry;
-
+// check string represents valid number
 int isNumber(char* input) {
     int length = strlen(input);
     for (int i = 0; i < length; i++) {
         if (!isdigit(input[i])) {
-            return 0;
+            return 0; // non-digit char found
         }
     }
-    return 1;
+    return 1; // all chars digits
 }
 
+// print header based on flag
 void printHeader(int flag, FILE* file) {
     if (flag == FLAG_PRE_PROCESS) {
         // pre-process
@@ -52,12 +31,12 @@ void printHeader(int flag, FILE* file) {
     else if (flag == FLAG_OUTPUT_TXT){
         // output_TXT
         fprintf(file, "%-8s %-8s %-8s %-32s %s\n", "", "PID", "FD", "Filename", "Inode");
-        fprintf(file, "        ================================================\n");
+        fprintf(file, "        ======================================================\n");
     }
     else if (flag == FLAG_OUTPUT_BINARY){
         // output_binary
         fwrite("        PID      FD       Filename                       Inode\n", sizeof(char), 55, file);
-        fwrite("        ================================================\n", sizeof(char), 49, file);
+        fwrite("        ======================================================\n", sizeof(char), 49, file);
     }
     else{
         // composite or no flags
@@ -66,6 +45,7 @@ void printHeader(int flag, FILE* file) {
     }
 }
 
+// print summary of pids and fd counts
 void printSummary(int pidCount, PIDEntry * pidTable){
     printf("Summary Table\n" );
     printf("================\n");
@@ -78,6 +58,7 @@ void printSummary(int pidCount, PIDEntry * pidTable){
     printf("\n");
 }
 
+// print pids that exceed fd threshold
 void printThreshold(int pidCount, PIDEntry * pidTable, int threshold_val){
     printf("## Offending processes -- #FD threshold=%d\n", threshold_val);
     for (int i = 0; i < pidCount; i++) {
@@ -91,6 +72,7 @@ void printThreshold(int pidCount, PIDEntry * pidTable, int threshold_val){
     printf("\n");
 }
 
+// print fd data based on flag
 void printData(int flag, int * row, struct dirent * entry, struct dirent * fd_entry, char * target_path, struct stat statbuf, FILE* file){
     if (flag == FLAG_PRE_PROCESS){
         printf("%-8d %-8s %-8s\n", (*row)++, entry->d_name, fd_entry->d_name);
@@ -116,6 +98,7 @@ void printData(int flag, int * row, struct dirent * entry, struct dirent * fd_en
     }
 }
 
+// update pid table with fd counts
 void updatePIDTable(int * pidCount, PIDEntry** pidTable, struct dirent *entry) {
     for (int i = 0; i < *pidCount; i++) {
         if (strcmp((*pidTable)[i].pid, entry->d_name) == 0) {
@@ -130,13 +113,18 @@ void updatePIDTable(int * pidCount, PIDEntry** pidTable, struct dirent *entry) {
     }
 }
 
+// process individual fd entry
 void processFDEntry(int flag, int * row, struct dirent *entry, struct dirent *fd_entry, char *link_path, int* pidCount, PIDEntry** pidTable, FILE* file){
     char target_path[MAX_PATH_LENGTH];
+
+    // read symbolic link and get actual file path
     ssize_t len = readlink(link_path, target_path, sizeof(target_path) - 1);
     if (len == -1) return;
 
     target_path[len] = '\0';
     struct stat statbuf;
+
+    // get fd metadata
     if (stat(link_path, &statbuf) != 0) return;
 
     if (flag == FLAG_SUMMARY || flag == FLAG_THRESHOLD) {
@@ -146,6 +134,7 @@ void processFDEntry(int flag, int * row, struct dirent *entry, struct dirent *fd
     }
 }
 
+// process all fds for pid
 void processFD(int flag, int *row, int* pidCount, PIDEntry** pidTable, int target_pid, FILE* file, char * fd_path, struct dirent *entry, DIR *dir) {
     struct dirent *fd_entry;
     while ((fd_entry = readdir(dir)) != NULL) {
@@ -163,6 +152,7 @@ void processFD(int flag, int *row, int* pidCount, PIDEntry** pidTable, int targe
     closedir(dir);
 }
 
+// process dir and iterate over pids
 void processDirectory(int flag, int* pidCount, PIDEntry** pidTable, int target_pid, FILE* file) {
     int row = 0;
 
@@ -203,6 +193,7 @@ void processDirectory(int flag, int* pidCount, PIDEntry** pidTable, int target_p
     closedir(proc);
 }
 
+// parse clas
 void parseArguments(int argc, char **argv, int *flags, int *threshold_val, pid_t *target_pid, int *flag_detected) {
     for (int i = 1; i < argc; ++i) {
         if (strncmp(argv[i], "--pre-process", 14) == 0) {
@@ -243,6 +234,7 @@ void parseArguments(int argc, char **argv, int *flags, int *threshold_val, pid_t
     }
 }
 
+// process flags and execute appropriate actions
 void processFlags(int *flags, int threshold_val, pid_t target_pid, int flag_detected, PIDEntry **pidTable, int *pidCount) {
     FILE *file_txt = NULL;
     FILE *file_binary = NULL;
