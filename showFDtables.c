@@ -145,13 +145,7 @@ void processFDEntry(int flag, int * row, struct dirent *entry, struct dirent *fd
     }
 }
 
-void processFD(int flag, int *row, int* pidCount, PIDEntry** pidTable, int target_pid, FILE* file, char * fd_path, struct dirent *entry) {
-    DIR *dir = opendir(fd_path);
-    if (!dir) {
-        perror("opendir failed");
-        return;
-    }
-    
+void processFD(int flag, int *row, int* pidCount, PIDEntry** pidTable, int target_pid, FILE* file, char * fd_path, struct dirent *entry, DIR *dir) {
     struct dirent *fd_entry;
     while ((fd_entry = readdir(dir)) != NULL) {
         if (fd_entry->d_type != DT_LNK) continue;
@@ -181,11 +175,17 @@ void processDirectory(int flag, int* pidCount, PIDEntry** pidTable, int target_p
         sprintf(pid_str, "%d", target_pid);
         strncat(fd_path, pid_str, sizeof(fd_path) - strlen(fd_path) - 1);
         strncat(fd_path, "/fd", sizeof(fd_path) - strlen(fd_path) - 1);
+        
+        DIR *dir = opendir(fd_path);
+        if (!dir) {
+            perror("opendir failed");
+            return;
+        }
 
         struct dirent entry;
         sprintf(entry.d_name, "%d", target_pid);
 
-        processFD(flag, &row, pidCount, pidTable, target_pid, file, fd_path, &entry);
+        processFD(flag, &row, pidCount, pidTable, target_pid, file, fd_path, &entry, dir);
         return;
     }
 
@@ -205,7 +205,10 @@ void processDirectory(int flag, int* pidCount, PIDEntry** pidTable, int target_p
             strncat(fd_path, entry->d_name, sizeof(fd_path) - strlen(fd_path) - 1);
             strncat(fd_path, "/fd", sizeof(fd_path) - strlen(fd_path) - 1);
 
-            processFD(flag, &row, pidCount, pidTable, target_pid, file, fd_path, entry);
+            DIR *dir = opendir(fd_path);
+            if (!dir) continue;
+
+            processFD(flag, &row, pidCount, pidTable, target_pid, file, fd_path, entry, dir);
         }
     }
     closedir(proc);
