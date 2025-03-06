@@ -115,6 +115,20 @@ void printData(int flag, int * row, struct dirent * entry, struct dirent * fd_en
     }
 }
 
+void updatePIDTable(int * pidCount, PIDEntry** pidTable, struct dirent *entry) {
+    for (int i = 0; i < *pidCount; i++) {
+        if (strcmp((*pidTable)[i].pid, entry->d_name) == 0) {
+            (*pidTable)[i].count++;
+            return;
+        }
+    }
+    if (*pidCount < MAX_PIDS) {
+        (*pidTable)[*pidCount].pid = entry->d_name;
+        (*pidTable)[*pidCount].count = 1;
+        (*pidCount)++;
+    }
+}
+
 void processFD(int flag, int row, int* pidCount, PIDEntry** pidTable, int target_pid, FILE* file, char * fd_path, struct dirent *entry, DIR *dir) {
     struct dirent *fd_entry;
     while ((fd_entry = readdir(dir)) != NULL) {
@@ -133,19 +147,7 @@ void processFD(int flag, int row, int* pidCount, PIDEntry** pidTable, int target
             struct stat statbuf;
             if (stat(link_path, &statbuf) == 0) {
                 if (flag == FLAG_SUMMARY || flag == FLAG_THRESHOLD) {
-                    int found = 0;
-                    for (int i = 0; i < *pidCount; i++) {
-                        if (strcmp((*pidTable)[i].pid, entry->d_name) == 0) {
-                            (*pidTable)[i].count++;
-                            found = 1;
-                            break;
-                        }
-                    }
-                    if (!found && *pidCount < MAX_PIDS) {
-                        (*pidTable)[*pidCount].pid = entry->d_name;
-                        (*pidTable)[*pidCount].count = 1;
-                        (*pidCount)++;
-                    }
+                    updatePIDTable(pidCount, pidTable, entry);
                 } else {
                     printData(flag, &row, entry, fd_entry, target_path, statbuf, file);
                 }
