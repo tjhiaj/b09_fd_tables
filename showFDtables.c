@@ -243,68 +243,72 @@ void parseArguments(int argc, char **argv, int *flags, int *threshold_val, pid_t
     }
 }
 
-int main(int argc, char ** argv) {
-    int flags[8] = {0};
-    int threshold_val;
-    int flag_detected = 0;
-    pid_t target_pid = 0;
-    
-    PIDEntry* pidTable = malloc(MAX_PIDS * sizeof(PIDEntry));
-    if (!pidTable) {
-        perror("malloc failed");
-        return 1;
-    }
-    int pidCount = 0;
-
+void processFlags(int *flags, int threshold_val, pid_t target_pid, int flag_detected, PIDEntry **pidTable, int *pidCount) {
     FILE *file_txt = NULL;
     FILE *file_binary = NULL;
 
-    parseArguments(argc, argv, flags, &threshold_val, &target_pid, &flag_detected);
-
     if (flags[FLAG_PRE_PROCESS]) {
         printHeader(FLAG_PRE_PROCESS, NULL);
-        processDirectory(FLAG_PRE_PROCESS, &pidCount, &pidTable, target_pid, NULL);
+        processDirectory(FLAG_PRE_PROCESS, pidCount, pidTable, target_pid, NULL);
     }
     if (flags[FLAG_SYSTEM_WIDE]) {
         printHeader(FLAG_SYSTEM_WIDE, NULL);
-        processDirectory(FLAG_SYSTEM_WIDE, &pidCount, &pidTable, target_pid, NULL);
+        processDirectory(FLAG_SYSTEM_WIDE, pidCount, pidTable, target_pid, NULL);
     }
     if (flags[FLAG_VNODES]) {
         printHeader(FLAG_VNODES, NULL);
-        processDirectory(FLAG_VNODES, &pidCount, &pidTable, target_pid, NULL);
+        processDirectory(FLAG_VNODES, pidCount, pidTable, target_pid, NULL);
     }
     if (!flag_detected || flags[FLAG_COMPOSITE]){
         printHeader(0, NULL);
-        processDirectory(0, &pidCount, &pidTable, target_pid, NULL);
+        processDirectory(0, pidCount, pidTable, target_pid, NULL);
     }
     if (flags[FLAG_SUMMARY]) {
-        processDirectory(FLAG_SUMMARY, &pidCount, &pidTable, target_pid, NULL);
-        printSummary(pidCount, pidTable);
+        processDirectory(FLAG_SUMMARY, pidCount, pidTable, target_pid, NULL);
+        printSummary(*pidCount, *pidTable);
     }
     if (flags[FLAG_THRESHOLD]){
-        processDirectory(FLAG_THRESHOLD, &pidCount, &pidTable, target_pid, NULL);
-        printThreshold(pidCount, pidTable, threshold_val);
+        processDirectory(FLAG_THRESHOLD, pidCount, pidTable, target_pid, NULL);
+        printThreshold(*pidCount, *pidTable, threshold_val);
     }
     if (flags[FLAG_OUTPUT_TXT]){
         file_txt = fopen("compositeTable.txt", "w");
         if (!file_txt) {
             perror("fopen failed");
-            return 1;
+            return;
         }
         printHeader(FLAG_OUTPUT_TXT, file_txt);
-        processDirectory(FLAG_OUTPUT_TXT, &pidCount, &pidTable, target_pid, file_txt);
+        processDirectory(FLAG_OUTPUT_TXT, pidCount, pidTable, target_pid, file_txt);
         fclose(file_txt);
     }
     if (flags[FLAG_OUTPUT_BINARY]){
         file_binary = fopen("compositeTable.bin", "wb");
         if (!file_binary) {
             perror("fopen failed");
-            return 1;
+            return;
         }
         printHeader(FLAG_OUTPUT_BINARY, file_binary);
-        processDirectory(FLAG_OUTPUT_BINARY, &pidCount, &pidTable, target_pid, file_binary);
+        processDirectory(FLAG_OUTPUT_BINARY, pidCount, pidTable, target_pid, file_binary);
         fclose(file_binary);
     }
+}
+
+int main(int argc, char ** argv) {
+    int flags[8] = {0};
+    int threshold_val;
+    int flag_detected = 0;
+    pid_t target_pid = 0;
+    int pidCount = 0;
+    
+    PIDEntry* pidTable = malloc(MAX_PIDS * sizeof(PIDEntry));
+    if (!pidTable) {
+        perror("malloc failed");
+        return 1;
+    }
+
+    parseArguments(argc, argv, flags, &threshold_val, &target_pid, &flag_detected);
+
+    processFlags(flags, threshold_val, target_pid, flag_detected, &pidTable, &pidCount);
     
     free(pidTable);
     return 0;
