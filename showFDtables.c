@@ -129,30 +129,35 @@ void updatePIDTable(int * pidCount, PIDEntry** pidTable, struct dirent *entry) {
     }
 }
 
-void processFD(int flag, int row, int* pidCount, PIDEntry** pidTable, int target_pid, FILE* file, char * fd_path, struct dirent *entry, DIR *dir) {
+void processFDEntry(int flag, int * row, struct dirent *entry, struct dirent *fd_entry, char *link_path, int* pidCount, PIDEntry** pidTable, FILE* file){
+    char target_path[MAX_PATH_LENGTH];
+    ssize_t len = readlink(link_path, target_path, sizeof(target_path) - 1);
+    if (len == -1) return;
+
+    target_path[len] = '\0';
+    struct stat statbuf;
+    if (stat(link_path, &statbuf) != 0) return;
+
+    if (flag == FLAG_SUMMARY || flag == FLAG_THRESHOLD) {
+        updatePIDTable(pidCount, pidTable, entry);
+    } else {
+        printData(flag, row, entry, fd_entry, target_path, statbuf, file);
+    }
+}
+
+void processFD(int flag, int *row, int* pidCount, PIDEntry** pidTable, int target_pid, FILE* file, char * fd_path, struct dirent *entry, DIR *dir) {
     struct dirent *fd_entry;
     while ((fd_entry = readdir(dir)) != NULL) {
         if (fd_entry->d_type != DT_LNK) continue;
 
-        char link_path[MAX_PATH_LENGTH], target_path[MAX_PATH_LENGTH];
+        char link_path[MAX_PATH_LENGTH];
         strncpy(link_path, fd_path, sizeof(link_path) - 1);
         link_path[sizeof(link_path) - 1] = '\0';
 
         strncat(link_path, "/", sizeof(link_path) - strlen(link_path) - 1);
         strncat(link_path, fd_entry->d_name, sizeof(link_path) - strlen(link_path) - 1);
                 
-        ssize_t len = readlink(link_path, target_path, sizeof(target_path) - 1);
-        if (len != -1) {
-            target_path[len] = '\0';
-            struct stat statbuf;
-            if (stat(link_path, &statbuf) == 0) {
-                if (flag == FLAG_SUMMARY || flag == FLAG_THRESHOLD) {
-                    updatePIDTable(pidCount, pidTable, entry);
-                } else {
-                    printData(flag, &row, entry, fd_entry, target_path, statbuf, file);
-                }
-            }
-        }
+        processFDEntry(flag, row, entry, fd_entry, link_path, pidCount, pidTable, file);
     }
     closedir(dir);
 }
@@ -180,7 +185,7 @@ void processDirectory(int flag, int* pidCount, PIDEntry** pidTable, int target_p
         struct dirent entry;
         sprintf(entry.d_name, "%d", target_pid);
 
-        processFD(flag, row, pidCount, pidTable, target_pid, file, fd_path, &entry, dir);
+        processFD(flag, &row, pidCount, pidTable, target_pid, file, fd_path, &entry, dir);
         return;
     }
 
@@ -207,7 +212,7 @@ void processDirectory(int flag, int* pidCount, PIDEntry** pidTable, int target_p
             DIR *dir = opendir(fd_path);
             if (!dir) continue;
 
-            processFD(flag, row, pidCount, pidTable, target_pid, file, fd_path, entry, dir);
+            processFD(flag, &row, pidCount, pidTable, target_pid, file, fd_path, entry, dir);
         }
     }
     closedir(proc);
