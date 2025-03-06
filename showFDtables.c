@@ -16,6 +16,7 @@
 #define FLAG_OUTPUT_BINARY 5
 #define FLAG_SUMMARY 6
 #define FLAG_THRESHOLD 7
+#define FLAG_COMPOSITE 0
 
 typedef struct {
     char * pid;
@@ -59,7 +60,7 @@ void printHeader(int flag, FILE* file) {
         fwrite("        ================================================\n", sizeof(char), 49, file);
     }
     else{
-        // comoposite or no flags
+        // composite or no flags
         printf("%-8s %-8s %-8s %-32s %s\n", "", "PID", "FD", "Filename", "Inode");
         printf("        ================================================\n");
     }
@@ -167,14 +168,7 @@ void processDirectory(int flag, int* pidCount, PIDEntry** pidTable, int target_p
 
     if (target_pid > 0) {
         char fd_path[MAX_PATH_LENGTH];
-        strncpy(fd_path, PROC_PATH, sizeof(fd_path) - 1);
-        fd_path[sizeof(fd_path) - 1] = '\0';
-        strncat(fd_path, "/", sizeof(fd_path) - strlen(fd_path) - 1);
-
-        char pid_str[20];
-        sprintf(pid_str, "%d", target_pid);
-        strncat(fd_path, pid_str, sizeof(fd_path) - strlen(fd_path) - 1);
-        strncat(fd_path, "/fd", sizeof(fd_path) - strlen(fd_path) - 1);
+        snprintf(fd_path, sizeof(fd_path), "%s/%d/fd", PROC_PATH, target_pid);
         
         DIR *dir = opendir(fd_path);
         if (!dir) {
@@ -183,8 +177,7 @@ void processDirectory(int flag, int* pidCount, PIDEntry** pidTable, int target_p
         }
 
         struct dirent entry;
-        sprintf(entry.d_name, "%d", target_pid);
-
+        snprintf(entry.d_name, sizeof(entry.d_name), "%d", target_pid);
         processFD(flag, &row, pidCount, pidTable, target_pid, file, fd_path, &entry, dir);
         return;
     }
@@ -199,11 +192,7 @@ void processDirectory(int flag, int* pidCount, PIDEntry** pidTable, int target_p
     while ((entry = readdir(proc)) != NULL) {
         if (entry->d_type == DT_DIR && isNumber(entry->d_name)) {
             char fd_path[MAX_PATH_LENGTH];
-            strncpy(fd_path, PROC_PATH, sizeof(fd_path) - 1);
-            fd_path[sizeof(fd_path) - 1] = '\0';
-            strncat(fd_path, "/", sizeof(fd_path) - strlen(fd_path) - 1);
-            strncat(fd_path, entry->d_name, sizeof(fd_path) - strlen(fd_path) - 1);
-            strncat(fd_path, "/fd", sizeof(fd_path) - strlen(fd_path) - 1);
+            snprintf(fd_path, sizeof(fd_path), "%s/%s/fd", PROC_PATH, entry->d_name);
 
             DIR *dir = opendir(fd_path);
             if (!dir) continue;
@@ -215,17 +204,10 @@ void processDirectory(int flag, int* pidCount, PIDEntry** pidTable, int target_p
 }
 
 int main(int argc, char ** argv) {
-    int pre_process = 0;
-    int systemWide = 0;
-    int Vnodes = 0;
-    int composite = 0;
-    int summary = 0;
-    int threshold = 0;
+    int flags[8] = {0};
     int threshold_val;
     int flag_detected = 0;
     pid_t target_pid = 0;
-    int output_TXT = 0;
-    int output_binary = 0;
     
     PIDEntry* pidTable = malloc(MAX_PIDS * sizeof(PIDEntry));
     if (!pidTable) {
@@ -239,84 +221,84 @@ int main(int argc, char ** argv) {
 
     for (int i = 1; i < argc; ++i) {
         if (strncmp(argv[i], "--pre-process", 14) == 0) {
-            pre_process = 1;
+            flags[FLAG_PRE_PROCESS] = 1;
             flag_detected = 1;
         } 
         else if (strncmp(argv[i], "--systemWide", 13) == 0) {
-            systemWide = 1;
+            flags[FLAG_SYSTEM_WIDE] = 1;
             flag_detected = 1;
         }
         else if (strncmp(argv[i], "--Vnodes", 8) == 0) {
-            Vnodes = 1;
+            flags[FLAG_VNODES] = 1;
             flag_detected = 1;
         }
         else if (strncmp(argv[i], "--composite", 12) == 0) {
-            composite = 1;
+            flags[FLAG_COMPOSITE] = 1;
             flag_detected = 1;
         }
         else if (strncmp(argv[i], "--summary", 10) == 0) {
-            summary = 1;
+            flags[FLAG_SUMMARY] = 1;
             flag_detected = 1;
         }
         else if (i == 1 && isdigit(argv[i][0])) { 
             target_pid = atoi(argv[i]);
         }
-        else if (strncmp(argv[i], "--threshold=", 13) == 0) {
-            threshold = 1;
+        else if (strncmp(argv[i], "--threshold=", 12) == 0) {
+            flags[FLAG_THRESHOLD] = 1;
             threshold_val = atoi(argv[i] + 12);
         }
         else if (strncmp(argv[i], "--output_TXT", 13) == 0) {
-            output_TXT = 1;
+            flags[FLAG_OUTPUT_TXT] = 1;
             flag_detected = 1;
         }
         else if (strncmp(argv[i], "--output_binary", 16) == 0) {
-            output_binary = 1;
+            flags[FLAG_OUTPUT_BINARY] = 1;
             flag_detected = 1;
         }
     }
 
-    if (pre_process) {
+    if (flags[FLAG_PRE_PROCESS]) {
         printHeader(FLAG_PRE_PROCESS, NULL);
         processDirectory(FLAG_PRE_PROCESS, &pidCount, &pidTable, target_pid, NULL);
     }
-    if (systemWide) {
+    if (flags[FLAG_SYSTEM_WIDE]) {
         printHeader(FLAG_SYSTEM_WIDE, NULL);
         processDirectory(FLAG_SYSTEM_WIDE, &pidCount, &pidTable, target_pid, NULL);
     }
-    if (Vnodes) {
+    if (flags[FLAG_VNODES]) {
         printHeader(FLAG_VNODES, NULL);
         processDirectory(FLAG_VNODES, &pidCount, &pidTable, target_pid, NULL);
     }
-    if (!flag_detected || composite){
+    if (!flag_detected || flags[FLAG_COMPOSITE]){
         printHeader(0, NULL);
         processDirectory(0, &pidCount, &pidTable, target_pid, NULL);
     }
-    if (summary) {
+    if (flags[FLAG_SUMMARY]) {
         processDirectory(FLAG_SUMMARY, &pidCount, &pidTable, target_pid, NULL);
         printSummary(pidCount, pidTable);
     }
-    if (threshold){
+    if (flags[FLAG_THRESHOLD]){
         processDirectory(FLAG_THRESHOLD, &pidCount, &pidTable, target_pid, NULL);
         printThreshold(pidCount, pidTable, threshold_val);
     }
-    if (output_TXT){
+    if (flags[FLAG_OUTPUT_TXT]){
         file_txt = fopen("compositeTable.txt", "w");
         if (!file_txt) {
             perror("fopen failed");
             return 1;
         }
-        printHeader(FLAG_OUTPUT_TXT, NULL);
-        processDirectory(FLAG_OUTPUT_TXT, &pidCount, &pidTable, target_pid, NULL);
+        printHeader(FLAG_OUTPUT_TXT, file_txt);
+        processDirectory(FLAG_OUTPUT_TXT, &pidCount, &pidTable, target_pid, file_txt);
         fclose(file_txt);
     }
-    if (output_binary){
+    if (flags[FLAG_OUTPUT_BINARY]){
         file_binary = fopen("compositeTable.bin", "wb");
         if (!file_binary) {
             perror("fopen failed");
             return 1;
         }
-        printHeader(FLAG_OUTPUT_BINARY, NULL);
-        processDirectory(FLAG_OUTPUT_BINARY, &pidCount, &pidTable, target_pid, NULL);
+        printHeader(FLAG_OUTPUT_BINARY, file_binary);
+        processDirectory(FLAG_OUTPUT_BINARY, &pidCount, &pidTable, target_pid, file_binary);
         fclose(file_binary);
     }
     
