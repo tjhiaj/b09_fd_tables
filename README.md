@@ -11,6 +11,8 @@ The program processes system data by iterating over process directories, extract
 - **Default Behavior**: If no argument is passed, the program will display the composite table, which is equivalent to using the --composite flag.
 - **Threshold Behavior**: When the --threshold flag is used, the program assumes the default action of displaying the composite table along with threshold data.
 
+## How I Built It
+
 ### First Iteration
 In my first attempt, I focused on meeting the core requirement: listing the file descriptors for processes in the /proc directory. I began by navigating through each process directory (found under /proc/[pid]), looking for the fd directory, which contains links to open files. I also implemented a basic function to identify numeric directories (i.e., process IDs) to ensure I was only examining directories that represent actual processes.
 
@@ -143,8 +145,102 @@ Looking back, the first iteration served as a good foundation, but it was the pr
    
    If no arguments are passed, the program will display the composite table by default.
 
-## Comments on Implementation
+## Bonus
 
-- **Refactoring**: Various modules were refactored to streamline flag processing, improve maintainability, and prevent function signatures from becoming too large with new flags.
-- **Performance**: The program processes directories and file descriptors efficiently, but may be limited by system permissions and the number of processes being monitored.
-- **Error Handling**: Error handling has been implemented for file operations such as reading symbolic links and opening directories.
+#### **All PIDs**:
+| Run | Real_t (s) | User_t (s) | Sys_t (s) | Real_b (s) | User_b (s) | Sys_b (s) | Size_t (bytes) | Size_b (bytes) |
+|-----|------------|------------|-----------|------------|------------|-----------|----------------|----------------|
+| 1   | 0.024      | 0.001      | 0.010     | 0.020      | 0.000      | 0.009     | 13383          | 8606           |
+| 2   | 0.019      | 0.000      | 0.009     | 0.021      | 0.002      | 0.008     | 13383          | 8606           |
+| 3   | 0.022      | 0.002      | 0.010     | 0.021      | 0.001      | 0.009     | 13383          | 8606           |
+| 4   | 0.023      | 0.001      | 0.010     | 0.024      | 0.000      | 0.011     | 13383          | 8606           |
+| 5   | 0.021      | 0.002      | 0.009     | 0.023      | 0.000      | 0.011     | 13383          | 8606           |
+
+#### **One PID (3535897)**:
+| Run | Real_t (s) | User_t (s) | Sys_t (s) | Real_b (s) | User_b (s) | Sys_b (s) | Size_t (bytes) | Size_b (bytes) |
+|-----|------------|------------|-----------|------------|------------|-----------|----------------|----------------|
+| 1   | 0.016      | 0.002      | 0.003     | 0.015      | 0.000      | 0.004     | 3662           | 2354           |
+| 2   | 0.014      | 0.000      | 0.004     | 0.015      | 0.000      | 0.005     | 3662           | 2354           |
+| 3   | 0.015      | 0.001      | 0.004     | 0.014      | 0.001      | 0.004     | 3662           | 2354           |
+| 4   | 0.015      | 0.001      | 0.004     | 0.015      | 0.000      | 0.005     | 3662           | 2354           |
+| 5   | 0.014      | 0.001      | 0.004     | 0.009      | 0.001      | 0.000     | 3662           | 2354           |
+
+#### **All PIDs**:
+- **output_TXT**:
+  - Real: (0.024 s + 0.019 s + 0.022 s + 0.023 s + 0.021 s) / 5 = 0.0218 s
+  - User: (0.001 s + 0.000 s + 0.002 s + 0.001 s + 0.002 s) / 5  = 0.0012 s
+  - Sys: (0.010s  + 0.009 s + 0.010 s + 0.010 s + 0.009 s) / 5 = 0.0096 s
+  - Size: 13383 bytes
+
+- **output_binary**:
+  - Real: (0.020 s + 0.021 s + 0.021 s + 0.024 s + 0.023 s) / 5 = 0.0218 s
+  - User: (0.000 s + 0.002 s + 0.001 s + 0.000 s + 0.000 s) / 5 = 0.0006 s
+  - Sys: (0.009 s + 0.008 s + 0.009 s + 0.011 s + 0.011 s) / 5 = 0.0096 s
+  - Size: 8606 bytes
+
+#### **One PID (3535897)**:
+- **output_TXT**:
+  - Real: (0.016 + 0.014 + 0.015 + 0.015 + 0.014) / 5 = 0.0148 s
+  - User: (0.002 + 0.000 + 0.001 + 0.001 + 0.001) / 5 = 0.0010 s
+  - Sys: (0.003 + 0.004 + 0.004 + 0.004 + 0.004) / 5 = 0.0038 s
+  - Size: 3662 bytes
+
+- **output_binary**:
+  - Real: (0.015 s + 0.015 s + 0.014 s + 0.015 s + 0.0095 s) / 5 = 0.0136 s
+  - User: (0.000 + 0.000 + 0.001 + 0.000 + 0.001) / 5 = 0.0004 s
+  - Sys: (0.004 + 0.005 + 0.004 + 0.005 + 0.000) / 5 = 0.0036 s
+  - Size: 2354 bytes
+
+#### **All PIDs**:
+- **output_TXT**:
+  - Real: sqrt(((0.024-0.0218)^2 + (0.019-0.0218)^2 + (0.022-0.0218)^2 + (0.023-0.0218)^2 + (0.021-0.0218)^2) / 5) = 0.0017 s
+  - User: sqrt(((0.001-0.0012)^2 + (0.000-0.0012)^2 + (0.002-0.0012)^2 + (0.001-0.0012)^2 + (0.002-0.0012)^2) / 5) = 0.0008 s
+  - Sys: sqrt(((0.010-0.0096)^2 + (0.009-0.0096)^2 + (0.010-0.0096)^2 + (0.010-0.0096)^2 + (0.009-0.0096)^2) / 5) = 0.0005 s
+
+- **output_binary**:
+  - Real: sqrt(((0.020-0.0218)^2 + (0.021-0.0218)^2 + (0.021-0.0218)^2 + (0.024-0.0218)^2 + (0.023-0.0218)^2) / 5) = 0.0017 s
+  - User: sqrt(((0.000-0.0006)^2 + (0.002-0.0006)^2 + (0.001-0.0006)^2 + (0.000-0.0006)^2 + (0.000-0.0006)^2) / 5) = 0.0008 s
+  - Sys: sqrt(((0.009-0.0096)^2 + (0.008-0.0096)^2 + (0.009-0.0096)^2 + (0.011-0.0096)^2 + (0.011-0.0096)^2) / 5) = 0.0011 s
+
+#### **One PID (3535897)**:
+- **output_TXT**:
+  - Real: sqrt(((0.016-0.0148)^2 + (0.014-0.0148)^2 + (0.015-0.0148)^2 + (0.015-0.0148)^2 + (0.014-0.0148)^2) / 5) = 0.0007 s
+  - User: sqrt(((0.002-0.0010)^2 + (0.000-0.0010)^2 + (0.001-0.0010)^2 + (0.001-0.0010)^2 + (0.001-0.0010)^2) / 5) = 0.0007 s
+  - Sys: sqrt(((0.003-0.0038)^2 + (0.004-0.0038)^2 + (0.004-0.0038)^2 + (0.004-0.0038)^2 + (0.004-0.0038)^2) / 5) = 0.0004 s
+
+- **output_binary**:
+  - Real: sqrt(((0.015-0.0136)^2 + (0.015-0.0136)^2 + (0.014-0.0136)^2 + (0.015-0.0136)^2 + (0.009-0.0136)^2) / 5) = 0.0022 s
+  - User: sqrt(((0.000-0.0004)^2 + (0.000-0.0004)^2 + (0.001-0.0004)^2 + (0.000-0.0004)^2 + (0.001-0.0004)^2) / 5) = 0.0005 s
+  - Sys: sqrt(((0.004-0.0036)^2 + (0.005-0.0036)^2 + (0.004-0.0036)^2 + (0.005-0.0036)^2 + (0.000-0.0036)^2) / 5 ) = 0.0018 s
+
+#### **All PIDs**:
+| Metric               | output_TXT (Avg ± Std Dev)   | output_binary (Avg ± Std Dev)   |
+|----------------------|------------------------------|---------------------------------|
+| Real Time (s)        | 0.0218 ± 0.0017              | 0.0218 ± 0.0017                 |
+| User Time (s)        | 0.0012 ± 0.0008              | 0.0006 ± 0.0008                 |
+| Sys Time (s)         | 0.0096 ± 0.0005              | 0.0096 ± 0.0011                 |
+| File Size (bytes)    | 13383                        | 8606                            |
+
+#### **One PID (3535897)**:
+| Metric               | output_TXT (Avg ± Std Dev)   | output_binary (Avg ± Std Dev)   |
+|----------------------|------------------------------|---------------------------------|
+| Real Time (s)        | 0.0148 ± 0.0007              | 0.0136 ± 0.0022                 |
+| User Time (s)        | 0.0010 ± 0.0007              | 0.0004 ± 0.0005                 |
+| Sys Time (s)         | 0.0038 ± 0.0004              | 0.0036 ± 0.0018                 |
+| File Size (bytes)    | 3662                         | 2354                            |
+
+1. **Execution Time**:
+   - For **all PIDs**, both output_TXT and output_binary have similar real times (~0.0218s), but output_binary has slightly lower user time.
+   - For **one PID**, output_binary is slightly faster in real time (~0.0136s vs. ~0.0148s).
+
+2. **File Sizes**:
+   - Binary files are significantly smaller than text files:
+     - All PIDs: 8606 bytes (binary) vs. 13383 bytes (text).
+     - One PID: 2354 bytes (binary) vs. 3662 bytes (text).
+
+3. **Efficiency**:
+   - Binary output is more efficient in terms of file size and slightly faster in execution time.
+
+4. **Trade-offs**:
+   - Use text output for human readability.
+   - Use binary output for efficiency and smaller file sizes.
